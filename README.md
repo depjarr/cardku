@@ -16,6 +16,11 @@ Klik dua kali `index.html`, atau jalankan server lokal:
 - Pengunjung: http://127.0.0.1:5178/#rarashop
 - Dari HP (Wi-Fi sama): pakai alamat `http://192.168.x.x:5178` yang muncul di PowerShell.
 
+## Terbitkan isi buku (tanpa database)
+Di editor: **Bagikan → Unduh file <username>.json**, taruh di folder `books/`, lalu commit dan push.
+Halaman `/<username>` membaca `books/<username>.json`, jadi isinya sama di HP mana pun.
+Setiap selesai mengedit, unduh lagi file-nya dan push supaya pengunjung melihat versi terbaru.
+
 ## Deploy ke Vercel
 `vercel.json` sudah mengarahkan `/username` ke `index.html`, jadi `cardku-one.vercel.app/rarashop` langsung jadi halaman pengunjung.
 
@@ -28,8 +33,7 @@ Klik dua kali `index.html`, atau jalankan server lokal:
 - Tombol Bagikan: salin link pengunjung.
 
 ## Catatan penting
-- Ini mockup satu file (HTML + CSS + JS). Datanya tersimpan di localStorage browser,
-  jadi isi buku belum bisa dilihat dari perangkat lain.
+- Data editor tersimpan di localStorage browser. Pengunjung melihat versi terbit di `books/`.
 - Pemisahan alamat di mockup baru tampilan. Supaya orang lain benar-benar tidak bisa mengedit,
   versi asli butuh login di alamat editor dan server yang menolak perubahan dari selain pemilik.
 - Versi asli juga butuh database per username, penyimpanan foto, dan pemutar Spotify (embed + oEmbed).

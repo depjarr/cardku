@@ -311,6 +311,7 @@ button.cell:active{background:#e5e5ea}
 .nf{display:none;padding:40px 0}
 body.notfound .nf{display:block}
 body.notfound main{display:none}
+body.loading main{visibility:hidden}
 .nf-card{max-width:420px;margin:0 auto;background:var(--cell);border-radius:22px;padding:28px 24px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.08)}
 .nf-ic{font-size:44px;font-family:var(--emoji)}
 .nf-card h1{font-size:20px;margin:10px 0 6px;text-wrap:balance}
@@ -570,7 +571,7 @@ function scaleEl(el, base, f){
 }
 
 let saveT;
-function save(){ clearTimeout(saveT); saveT = setTimeout(() => {
+function save(){ if (mode === 'view') return; clearTimeout(saveT); saveT = setTimeout(() => {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) { toast('Memori browser penuh, pakai foto yang lebih kecil'); }
 }, 250); }
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2000); }
@@ -769,7 +770,7 @@ function renderSheet(){
       <p class="grp-f">Seperti stiker di iPhone: <b>Stiker</b> memberi garis putih, <b>Puffy</b> bikin timbul, <b>Komik</b> garis tegas, <b>Shiny</b> berkilau.</p>`;
   }
   else if (sheet === 'settings') h = settingsHTML();
-  else if (sheet === 'share') h = shareHTML();
+  else if (sheet === 'share') { h = shareHTML(); setTimeout(updatePubStatus, 0); }
   else if (!el) { closeSheet(); return; }
   else if (sheet === 'content') {
     if (el.type === 'text') h = `<div class="grp"><div class="cell"><textarea data-prop="text" aria-label="Isi teks">${esc(el.text)}</textarea></div></div>
@@ -921,16 +922,58 @@ function currentRoute(){
   }
   return /^[a-z0-9-]{1,40}$/.test(h) && !RESERVED.includes(h) ? h : '';
 }
-function applyRoute(){
+/* No database: a published book is a static file, books/<username>.json, committed to the repo and served by Vercel.
+   Visitors load that file; the editor keeps working on the copy in this browser (ownerState). */
+let ownerState = state, routeSeq = 0;
+const bookCache = {};
+async function loadPublished(name, fresh){
+  if (!/^https?:$/.test(location.protocol)) return null;
+  if (!fresh && name in bookCache) return bookCache[name];
+  try {
+    const r = await fetch(`/books/${encodeURIComponent(name)}.json`, {cache:'no-store'});
+    const d = r.ok ? await r.json() : null;
+    bookCache[name] = d && Array.isArray(d.pages) && d.pages.length ? d : null;
+  } catch (e) { bookCache[name] = null; }
+  return bookCache[name];
+}
+async function applyRoute(){
+  const seq = ++routeSeq;
   visitName = currentRoute();
   const visiting = !!visitName;
   mode = visiting ? 'view' : 'edit';
   sel = null; closeSheet(); if (focusOpen) { focusOpen = false; focusEl.hidden = true; }
   document.body.classList.toggle('viewing', visiting);
-  document.body.classList.toggle('notfound', visiting && visitName !== state.username);
+  let found = true;
+  if (visiting) {
+    document.body.classList.add('loading');
+    const pub = await loadPublished(visitName);
+    if (seq !== routeSeq) return;
+    document.body.classList.remove('loading');
+    if (pub) state = pub;
+    else { state = ownerState; found = visitName === ownerState.username; }
+    cur = 0; activePage = 0;
+  } else state = ownerState;
+  document.body.classList.toggle('notfound', visiting && !found);
   $('#nfTitle').textContent = `Buku @${visitName} belum ada`;
-  if (visiting) { cur = 0; activePage = 0; }
-  render(); renderBar();
+  applySkin(); render(); renderBar();
+}
+function downloadBook(){
+  const json = JSON.stringify(ownerState);
+  const url = URL.createObjectURL(new Blob([json], {type:'application/json'}));
+  const a = document.createElement('a'); a.href = url; a.download = `${ownerState.username}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  toast(`${ownerState.username}.json diunduh`);
+}
+async function updatePubStatus(){
+  const n = $('#pubStatus'); if (!n) return;
+  if (!/^https?:$/.test(location.protocol)) { n.textContent = ''; return; }
+  n.textContent = 'Mengecek versi yang sudah terbit…';
+  const pub = await loadPublished(ownerState.username, true);
+  const m = $('#pubStatus'); if (!m) return;
+  if (!pub) m.innerHTML = `<span class="note-bad">Belum terbit. Pengunjung di HP lain belum bisa melihat @${esc(ownerState.username)}.</span>`;
+  else if (JSON.stringify(pub) === JSON.stringify(ownerState)) m.innerHTML = '<span class="note-ok">✓ Sudah terbit dan sama persis dengan editor.</span>';
+  else m.innerHTML = '<span class="note-bad">Ada perubahan yang belum diterbitkan. Unduh lagi file-nya lalu push.</span>';
 }
 function localVisitorLink(){
   if (!/^https?:$/.test(location.protocol)) return '';
@@ -946,8 +989,12 @@ function shareHTML(){
     ${local ? `<div class="grp-t">Coba di HP (Wi-Fi yang sama)</div>
     <div class="grp"><div class="cell"><span class="linkbox" id="localLink">${esc(local)}</span><button type="button" data-act="copylocal" style="color:var(--tint);font-weight:600">Salin</button></div></div>`
     : onLocalhost ? `<p class="grp-f">Mau coba di HP? Buka editor lewat alamat <b>http://192.168.x.x:5178</b> yang muncul di PowerShell, lalu link untuk HP akan muncul di sini.</p>` : ''}
+    <div class="grp-t">Terbitkan isi buku</div>
+    <div class="grp"><button type="button" class="cell tint" data-act="publish">Unduh file ${esc(state.username)}.json</button></div>
+    <p class="grp-f" id="pubStatus"></p>
+    <p class="grp-f">Supaya isi buku muncul di HP orang lain: <b>1.</b> unduh file di atas, <b>2.</b> taruh di folder <b>books</b> di repo GitHub, <b>3.</b> push. Setelah Vercel selesai deploy, link pengunjung menampilkan isi bukumu. Ulangi setiap selesai mengedit.</p>
     <div class="grp" style="margin-top:16px"><button type="button" class="cell tint" data-act="openvisit">Lihat sebagai pengunjung</button></div>
-    <p class="grp-f">Editor ini ada di alamat utama tanpa /username. Di versi asli, alamat utama minta login dulu, jadi cuma kamu yang bisa mengedit.</p>`;
+    <p class="grp-f">Pengunjung melihat versi yang sudah terbit. Editor ada di alamat utama tanpa /username.</p>`;
 }
 async function copyText(text, nodeId){
   try { await navigator.clipboard.writeText(text); toast('Link disalin'); }
@@ -998,10 +1045,11 @@ shBody.addEventListener('click', (e) => {
   if (act === 'copylink') return copyText('https://' + PUBLIC_HOST + '/' + state.username, 'shareLink');
   if (act === 'copylocal') return copyText(localVisitorLink(), 'localLink');
   if (act === 'openvisit') { closeSheet(); location.hash = state.username; return; }
+  if (act === 'publish') { downloadBook(); return; }
   if (act === 'delpage') { confirmDel = true; renderSheet(); return; }
   if (act === 'delpage-no') { confirmDel = false; renderSheet(); return; }
   if (act === 'delpage-yes') { const n = activePage + 1; state.pages.splice(activePage, 1); confirmDel = false; save(); goTo(Math.max(0, activePage - 1)); toast(`Halaman ${n} dihapus`); return; }
-  if (act === 'reset') { state = seed(); cur = 0; activePage = 0; sel = null; try { localStorage.removeItem(KEY); } catch(err) {} applySkin(); render(); renderSheet(); toast('Isi contoh dikembalikan'); return; }
+  if (act === 'reset') { state = ownerState = seed(); cur = 0; activePage = 0; sel = null; try { localStorage.removeItem(KEY); } catch(err) {} applySkin(); render(); renderSheet(); toast('Isi contoh dikembalikan'); return; }
   if (!el) return;
   const loc = findEl(el.id);
   if (act === 'replace') { replacing = true; fileIn.click(); return; }
