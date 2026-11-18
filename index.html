@@ -306,6 +306,16 @@ button.cell:active{background:#e5e5ea}
   max-width:calc(100% - 32px);text-align:center;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .toast.show{transform:translate(-50%,0)}
 
+.brandlink{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--tint);background:rgba(255,255,255,.7);text-decoration:none;font-size:20px}
+.vpill{height:30px;padding:0 12px;border-radius:999px;background:var(--fill);color:var(--label2);font-size:12px;font-weight:600;display:flex;align-items:center}
+.nf{display:none;padding:40px 0}
+body.notfound .nf{display:block}
+body.notfound main{display:none}
+.nf-card{max-width:420px;margin:0 auto;background:var(--cell);border-radius:22px;padding:28px 24px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.nf-ic{font-size:44px;font-family:var(--emoji)}
+.nf-card h1{font-size:20px;margin:10px 0 6px;text-wrap:balance}
+.nf-card p{margin:0;color:var(--label2);line-height:1.45}
+.linkbox{font:600 15px/1.4 var(--sf);color:var(--tint);word-break:break-all;user-select:all;-webkit-user-select:all;flex:1;min-width:0}
 body.viewing .edit-only{display:none!important}
 body:not(.viewing) .view-only{display:none!important}
 @media (prefers-reduced-motion:reduce){.leaf,.sheet,.toast,.scrim{transition:none}}
@@ -317,12 +327,19 @@ body:not(.viewing) .view-only{display:none!important}
 <div class="app">
   <header class="nav">
     <button class="circle edit-only" id="setBtn" aria-label="Pengaturan"></button>
-    <span class="view-only"></span>
+    <a class="brandlink view-only" id="homeLink" href="#" aria-label="cardku">✿</a>
     <div class="ttl"><b id="navUser">@rarashop</b><span id="navSub">Mode edit</span></div>
     <button class="pillbtn edit-only" id="viewBtn"></button>
-    <button class="ghostbtn view-only" id="editBtn"></button>
+    <span class="vpill view-only">view only</span>
   </header>
 
+  <section class="nf" id="notFound">
+    <div class="nf-card">
+      <div class="nf-ic">📖</div>
+      <h1 id="nfTitle">Buku @username belum ada</h1>
+      <p>Coba cek lagi ejaan username-nya, atau minta link terbaru ke pemilik bukunya.</p>
+    </div>
+  </section>
   <main>
     <div class="bookwrap" id="bookwrap">
       <div class="book" id="book">
@@ -603,7 +620,7 @@ function render(){
   for (let s = 0; s < n; s += 2) dots += `<button role="tab" aria-label="Halaman ${s+1}${s+2<=n?'–'+(s+2):''}" aria-current="${s===cur}" data-goto="${s}"></button>`;
   $('#dots').innerHTML = dots;
   $('#prevBtn').disabled = cur <= 0; $('#nextBtn').disabled = cur + 2 >= n;
-  $('#navUser').textContent = '@' + (state.username || 'username');
+  $('#navUser').textContent = '@' + (visitName || state.username || 'username');
   const range = `hal ${cur+1}${cur+2<=n?'–'+(cur+2):''} dari ${n}`;
   $('#navSub').textContent = mode === 'edit' ? `Mode edit · ${range}` : range;
 }
@@ -711,7 +728,7 @@ function renderBar(){
 }
 
 /* ---------- sheets ---------- */
-const TITLES = {emoji:'Emoji', sticker:'Stiker', fx:'Efek stiker', content:'Isi', font:'Font', color:'Warna', arrange:'Atur posisi', settings:'Pengaturan'};
+const TITLES = {emoji:'Emoji', sticker:'Stiker', fx:'Efek stiker', share:'Bagikan', content:'Isi', font:'Font', color:'Warna', arrange:'Atur posisi', settings:'Pengaturan'};
 const CONTENT_TITLE = {text:'Isi teks', link:'Link toko', emoji:'Ganti emoji', image:'Foto', music:'Piringan hitam'};
 const PLATFORMS = [['🛒 Shopee','https://shopee.co.id/'],['🟢 Tokopedia','https://www.tokopedia.com/'],['📸 Instagram','https://instagram.com/'],['🎵 TikTok','https://www.tiktok.com/@'],['💬 WhatsApp','https://wa.me/62'],['📝 Google Form','https://forms.gle/'],['🐦 X','https://x.com/']];
 function openSheet(name){
@@ -752,6 +769,7 @@ function renderSheet(){
       <p class="grp-f">Seperti stiker di iPhone: <b>Stiker</b> memberi garis putih, <b>Puffy</b> bikin timbul, <b>Komik</b> garis tegas, <b>Shiny</b> berkilau.</p>`;
   }
   else if (sheet === 'settings') h = settingsHTML();
+  else if (sheet === 'share') h = shareHTML();
   else if (!el) { closeSheet(); return; }
   else if (sheet === 'content') {
     if (el.type === 'text') h = `<div class="grp"><div class="cell"><textarea data-prop="text" aria-label="Isi teks">${esc(el.text)}</textarea></div></div>
@@ -812,7 +830,7 @@ function settingsHTML(){
   const cur = activePage, p = state.pages[cur];
   return `<div class="grp-t" style="margin-top:4px">Username</div>
     <form class="grp" id="userForm"><div class="cell"><span class="at">@</span><input type="text" id="userIn" value="${esc(state.username)}" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="24" aria-label="Username" placeholder="username"><button type="submit" style="color:var(--tint);font-weight:600">Simpan</button></div></form>
-    <p class="grp-f" id="userNote">Pengunjung membuka buku kamu lewat username ini dan cuma bisa melihat. Huruf kecil, angka, titik, - atau _, minimal 3 karakter.</p>
+    <p class="grp-f" id="userNote">Link pengunjung: <b>${PUBLIC_HOST}/${esc(state.username)}</b>. Mereka cuma bisa melihat. Pakai huruf kecil, angka, atau tanda -, minimal 3 karakter.</p>
     <div class="grp-t">Tema</div>
     <div class="themes">${THEMES.map(([k,n]) => `<button type="button" class="theme" data-skin="${k}" aria-pressed="${state.skin===k}"><i class="th-${k}"></i>${n}</button>`).join('')}</div>
     <div class="grp-t">Halaman ${cur+1}</div>
@@ -891,10 +909,49 @@ function readImage(file){
     r.onerror = rej; r.readAsDataURL(file);
   });
 }
-function setMode(m){
-  mode = m; sel = null; closeSheet();
-  document.body.classList.toggle('viewing', m === 'view');
+/* Routing: the bare address is the owner's editor; /username (or #username here) is the read-only visitor page.
+   On Vercel, vercel.json rewrites /username to index.html, so the path works too. */
+const PUBLIC_HOST = /\.vercel\.app$/i.test(location.hostname) ? location.host : 'cardku-one.vercel.app';
+const RESERVED = ['edit','admin','login','api','settings','sidebar','customize','upgrade','downloads','index'];
+let visitName = '';
+function currentRoute(){
+  let h = decodeURIComponent(location.hash.slice(1)).toLowerCase().replace(/^\/+/, '');
+  if (!h && /\.vercel\.app$/i.test(location.hostname)) {
+    const m = /^\/([a-z0-9-]{3,24})\/?$/i.exec(location.pathname); if (m) h = m[1].toLowerCase();
+  }
+  return /^[a-z0-9-]{1,40}$/.test(h) && !RESERVED.includes(h) ? h : '';
+}
+function applyRoute(){
+  visitName = currentRoute();
+  const visiting = !!visitName;
+  mode = visiting ? 'view' : 'edit';
+  sel = null; closeSheet(); if (focusOpen) { focusOpen = false; focusEl.hidden = true; }
+  document.body.classList.toggle('viewing', visiting);
+  document.body.classList.toggle('notfound', visiting && visitName !== state.username);
+  $('#nfTitle').textContent = `Buku @${visitName} belum ada`;
+  if (visiting) { cur = 0; activePage = 0; }
   render(); renderBar();
+}
+function localVisitorLink(){
+  if (!/^https?:$/.test(location.protocol)) return '';
+  if (!/^(192\.168\.|10\.|172\.)/.test(location.hostname)) return '';
+  return `${location.origin}${location.pathname}#${state.username}`;
+}
+function shareHTML(){
+  const local = localVisitorLink();
+  const onLocalhost = /^https?:$/.test(location.protocol) && /^(localhost|127\.)/.test(location.hostname);
+  return `<div class="grp-t" style="margin-top:4px">Link untuk pengunjung</div>
+    <div class="grp"><div class="cell"><span class="linkbox" id="shareLink">${PUBLIC_HOST}/${esc(state.username)}</span><button type="button" data-act="copylink" style="color:var(--tint);font-weight:600">Salin</button></div></div>
+    <p class="grp-f">Orang yang membuka link ini cuma bisa melihat buku dan mengetuk link toko. Tidak ada tombol edit di sana.</p>
+    ${local ? `<div class="grp-t">Coba di HP (Wi-Fi yang sama)</div>
+    <div class="grp"><div class="cell"><span class="linkbox" id="localLink">${esc(local)}</span><button type="button" data-act="copylocal" style="color:var(--tint);font-weight:600">Salin</button></div></div>`
+    : onLocalhost ? `<p class="grp-f">Mau coba di HP? Buka editor lewat alamat <b>http://192.168.x.x:5178</b> yang muncul di PowerShell, lalu link untuk HP akan muncul di sini.</p>` : ''}
+    <div class="grp" style="margin-top:16px"><button type="button" class="cell tint" data-act="openvisit">Lihat sebagai pengunjung</button></div>
+    <p class="grp-f">Editor ini ada di alamat utama tanpa /username. Di versi asli, alamat utama minta login dulu, jadi cuma kamu yang bisa mengedit.</p>`;
+}
+async function copyText(text, nodeId){
+  try { await navigator.clipboard.writeText(text); toast('Link disalin'); }
+  catch (err) { const n = $('#' + nodeId); if (n) { const r = document.createRange(); r.selectNodeContents(n); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } toast('Tekan Ctrl+C untuk menyalin'); }
 }
 function applySkin(){ document.documentElement.dataset.skin = state.skin; }
 
@@ -938,6 +995,9 @@ shBody.addEventListener('click', (e) => {
   if (t.dataset.set && el) { const k = t.dataset.set; el[k] = k === 'weight' ? +t.dataset.v : t.dataset.v; repaint(el); fitEl(el); save(); renderSheet(); return; }
   const act = t.dataset.act; if (!act) return;
   if (act === 'addpage') return addPageAfter();
+  if (act === 'copylink') return copyText('https://' + PUBLIC_HOST + '/' + state.username, 'shareLink');
+  if (act === 'copylocal') return copyText(localVisitorLink(), 'localLink');
+  if (act === 'openvisit') { closeSheet(); location.hash = state.username; return; }
   if (act === 'delpage') { confirmDel = true; renderSheet(); return; }
   if (act === 'delpage-no') { confirmDel = false; renderSheet(); return; }
   if (act === 'delpage-yes') { const n = activePage + 1; state.pages.splice(activePage, 1); confirmDel = false; save(); goTo(Math.max(0, activePage - 1)); toast(`Halaman ${n} dihapus`); return; }
@@ -976,11 +1036,12 @@ shBody.addEventListener('input', (e) => {
 shBody.addEventListener('submit', (e) => {
   if (e.target.id !== 'userForm') return;
   e.preventDefault();
-  const slug = $('#userIn').value.trim().toLowerCase().replace(/^@/, '').replace(/\s+/g, '-').replace(/[^a-z0-9_.-]/g, '');
+  const slug = $('#userIn').value.trim().toLowerCase().replace(/^@/, '').replace(/[\s_.]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '');
   const note = $('#userNote');
-  if (slug.length < 3) { note.textContent = 'Username minimal 3 karakter: huruf kecil, angka, titik, - atau _.'; note.style.color = 'var(--red)'; return; }
+  if (slug.length < 3) { note.textContent = 'Username minimal 3 karakter: huruf kecil, angka, atau tanda -.'; note.style.color = 'var(--red)'; return; }
+  if (RESERVED.includes(slug) || slug.startsWith('comment-')) { note.textContent = `"${slug}" sudah dipakai sistem. Coba username lain.`; note.style.color = 'var(--red)'; return; }
   state.username = slug; $('#userIn').value = slug; save(); render();
-  note.style.color = ''; note.textContent = `Tersimpan. Pengunjung bisa membuka buku kamu lewat @${slug} dan cuma bisa melihat.`;
+  note.style.color = ''; note.innerHTML = `Tersimpan. Link pengunjung: <b>${PUBLIC_HOST}/${esc(slug)}</b>`;
   toast('Username disimpan');
 });
 fileIn.addEventListener('change', async () => {
@@ -1124,12 +1185,10 @@ document.addEventListener('keydown', (e) => {
 
 /* ---------- chrome ---------- */
 $('#setBtn').innerHTML = I.sliders;
-$('#viewBtn').innerHTML = I.eye + 'Lihat';
-$('#editBtn').innerHTML = I.pencil + 'Edit';
+$('#viewBtn').innerHTML = ic('<path d="M12 3.5v11M7.5 8 12 3.5 16.5 8"/><path d="M5 12.5v5.5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.5"/>') + 'Bagikan';
 $('#prevBtn').innerHTML = I.left; $('#nextBtn').innerHTML = I.right;
 $('#setBtn').addEventListener('click', () => sheet === 'settings' ? closeSheet() : (sel = null, render(), openSheet('settings')));
-$('#viewBtn').addEventListener('click', () => { setMode('view'); toast('Tampilan pengunjung (view only)'); });
-$('#editBtn').addEventListener('click', () => setMode('edit'));
+$('#viewBtn').addEventListener('click', () => sheet === 'share' ? closeSheet() : (sel = null, render(), openSheet('share')));
 $('#prevBtn').addEventListener('click', () => flip(-1));
 $('#nextBtn').addEventListener('click', () => flip(1));
 $('#dots').addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b) goTo(+b.dataset.goto); });
@@ -1148,7 +1207,8 @@ $('#fNext').addEventListener('click', () => focusStep(1));
 let rzT; addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(fitVisible, 200); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitVisible());
 
-applySkin(); render(); renderBar();
+addEventListener('hashchange', applyRoute);
+applySkin(); applyRoute();
 })();
 </script>
 </body>
