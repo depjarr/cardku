@@ -305,6 +305,20 @@ button.cell:active{background:#e5e5ea}
   background:rgba(28,28,30,.88);color:#fff;border-radius:999px;padding:10px 18px;font-weight:600;font-size:14px;transition:transform .3s cubic-bezier(.3,.9,.3,1);
   max-width:calc(100% - 32px);text-align:center;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .toast.show{transform:translate(-50%,0)}
+.spdock{position:fixed;z-index:75;left:50%;transform:translateX(-50%);width:min(calc(100% - 32px),398px);
+  bottom:calc(84px + env(safe-area-inset-bottom,0px));padding:10px 10px 8px;border-radius:22px;
+  background:var(--glass);backdrop-filter:blur(22px) saturate(1.8);-webkit-backdrop-filter:blur(22px) saturate(1.8);
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 10px 30px rgba(0,0,0,.16)}
+.spdock[hidden]{display:none}
+body.viewing .spdock{bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+.sp-head{display:flex;align-items:center;gap:8px;padding:0 4px 8px}
+.sp-txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.sp-txt b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-txt span{font-size:12px;color:var(--label2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-x{width:28px;height:28px;border-radius:50%;background:var(--fill);color:var(--label2);font-size:12px;font-weight:700}
+.sp-embed{border-radius:12px;overflow:hidden;min-height:80px;background:rgba(0,0,0,.06)}
+.sp-embed iframe{display:block;border:0;width:100%;height:80px}
+.sp-hint{margin:6px 4px 0;font-size:11px;color:var(--label2)}
 
 .brandlink{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--tint);background:rgba(255,255,255,.7);text-decoration:none;font-size:20px}
 .vpill{height:30px;padding:0 12px;border-radius:999px;background:var(--fill);color:var(--label2);font-size:12px;font-weight:600;display:flex;align-items:center}
@@ -393,6 +407,14 @@ body:not(.viewing) .view-only{display:none!important}
     <feComposite in="SourceGraphic" in2="sc" operator="arithmetic" k1="0" k2="1" k3=".85" k4="0"/>
   </filter>
 </svg>
+<section class="spdock" id="spDock" hidden aria-label="Pemutar lagu">
+  <div class="sp-head">
+    <div class="sp-txt"><b id="spTitle">Lagu</b><span id="spArtist">Spotify</span></div>
+    <button type="button" class="sp-x" id="spClose" aria-label="Tutup pemutar">✕</button>
+  </div>
+  <div class="sp-embed" id="spEmbed"></div>
+  <p class="sp-hint">Belum ada suara? Ketuk ▶ di pemutar Spotify.</p>
+</section>
 <nav class="bar" id="bar" aria-label="Alat"></nav>
 <div class="scrim" id="scrim"></div>
 <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">
@@ -700,12 +722,60 @@ function musicHTML(el){
       <span class="vn-play">${on?'❚❚':'▶'}</span></div>
   </div>`;
 }
-let playingId = null, musicTold = false;
-function togglePlay(id){
-  playingId = playingId === id ? null : id;
-  const el = findEl(id)?.el; if (el) repaint(el);
-  if (playingId && !musicTold) { musicTold = true; toast('Mockup: animasinya jalan, lagunya diputar di versi asli'); }
+/* Spotify playback: the official Spotify embed (iFrame API) plays the song in a small dock;
+   its playback events drive the vinyl animation, so the record only spins while sound is playing. */
+let playingId = null, spApi = null, spCtrl = null, spId = null, spLoading = false, spFailed = false, spPending = null;
+function setPlaying(id){
+  if (playingId === id) return;
+  const prev = playingId; playingId = id;
+  [prev, id].forEach(x => { const el = x && findEl(x)?.el; if (el) repaint(el); });
   if (sheet === 'content') renderSheet();
+}
+function loadSpotifyApi(cb){
+  if (spApi) return cb();
+  spPending = cb;
+  if (spLoading) return;
+  spLoading = true;
+  window.onSpotifyIframeApiReady = (api) => { spApi = api; spLoading = false; const f = spPending; spPending = null; if (f) f(); };
+  const s = document.createElement('script');
+  s.src = 'https://open.spotify.com/embed/iframe-api/v1'; s.async = true;
+  s.onerror = () => { spLoading = false; spFailed = true; spPending = null; toast('Pemutar Spotify tidak bisa dimuat di halaman ini'); };
+  document.head.appendChild(s);
+}
+function openDock(el){
+  $('#spTitle').textContent = el.title || 'Lagu';
+  $('#spArtist').textContent = el.artist || 'Spotify';
+  $('#spDock').hidden = false;
+}
+function closeDock(){
+  if (spCtrl) { try { spCtrl.pause(); } catch (e) {} }
+  $('#spDock').hidden = true; setPlaying(null);
+}
+function togglePlay(id){
+  const el = findEl(id)?.el; if (!el) return;
+  const s = spotifyInfo(el.url);
+  if (!s) { toast(el.url ? 'Pakai link lagu dari open.spotify.com' : 'Belum ada link lagu Spotify'); return; }
+  if (!/^https?:$/.test(location.protocol) || spFailed) {
+    // no network player here (e.g. a preview sandbox): animate only
+    setPlaying(playingId === id ? null : id); toast('Lagu diputar di cardku-one.vercel.app'); return;
+  }
+  openDock(el);
+  if (spCtrl && spId === id) { spCtrl.togglePlay(); return; }
+  const uri = `spotify:${s.kind}:${s.id}`;
+  spId = id; setPlaying(null);
+  loadSpotifyApi(() => {
+    if (spCtrl) { spCtrl.loadUri(uri); spCtrl.play(); return; }
+    const host = document.createElement('div');
+    $('#spEmbed').replaceChildren(host);
+    spApi.createController(host, {uri, width:'100%', height:80}, (ctrl) => {
+      spCtrl = ctrl;
+      ctrl.addListener('ready', () => { try { ctrl.play(); } catch (e) {} });
+      ctrl.addListener('playback_update', (e) => {
+        const d = e.data || {};
+        setPlaying(!d.isPaused && !d.isBuffering ? spId : (d.isBuffering && playingId ? playingId : null));
+      });
+    });
+  });
 }
 
 function renderBar(){
@@ -942,6 +1012,7 @@ async function applyRoute(){
   const visiting = !!visitName;
   mode = visiting ? 'view' : 'edit';
   sel = null; closeSheet(); if (focusOpen) { focusOpen = false; focusEl.hidden = true; }
+  if (!$('#spDock').hidden) closeDock();
   document.body.classList.toggle('viewing', visiting);
   let found = true;
   if (visiting) {
@@ -1237,6 +1308,7 @@ $('#viewBtn').innerHTML = ic('<path d="M12 3.5v11M7.5 8 12 3.5 16.5 8"/><path d=
 $('#prevBtn').innerHTML = I.left; $('#nextBtn').innerHTML = I.right;
 $('#setBtn').addEventListener('click', () => sheet === 'settings' ? closeSheet() : (sel = null, render(), openSheet('settings')));
 $('#viewBtn').addEventListener('click', () => sheet === 'share' ? closeSheet() : (sel = null, render(), openSheet('share')));
+$('#spClose').addEventListener('click', closeDock);
 $('#prevBtn').addEventListener('click', () => flip(-1));
 $('#nextBtn').addEventListener('click', () => flip(1));
 $('#dots').addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b) goTo(+b.dataset.goto); });
